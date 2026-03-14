@@ -1,0 +1,7 @@
+[package]
+name = "rseq-example"
+version = "0.0.1"
+edition = "2024"
+
+[dependencies]
+syscalls = "0.8.1"   
