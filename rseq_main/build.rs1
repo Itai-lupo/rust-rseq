@@ -1,0 +1,45 @@
+
+use std::process::Command;
+use std::env;
+use std::path::PathBuf;
+
+fn main() {
+    // 1. קבלת נתיב שורש הפרויקט (מעל rseq_main)
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
+    let root_dir = manifest_dir.parent().unwrap();
+
+    let ld_script = root_dir.join("rseq.ld");
+    let version_map = root_dir.join("rseq.map");
+
+    // 2. בניית ה-Payload באמצעות פקודת קרגו פנימית
+    // אנחנו מכריחים שימוש ב-musl וסט של דגלי Linker להסתרת סמלים
+   /*  let status = Command::new("cargo")
+        .args(&[
+            "rustc",
+            "-p", "rseq_payload",
+            "--target", "x86_64-unknown-linux-musl",
+            "--release",
+            "--",
+            "-C", &format!("link-arg=-T{}", ld_script.display()),
+            "-C", &format!("link-arg=-Wl,--version-script={}", version_map.display()),
+            "-C", "link-arg=-Wl,-Bsymbolic",
+            "-C", "link-arg=-Wl,--gc-sections", // מנקה פונקציות לא משומשות מ-Musl
+            "-C", "link-arg=-Wl,--exclude-libs,ALL", // מבטיח ששום דבר מ-Musl לא ידלוף החוצה
+        ])
+        .status()
+        .expect("Failed to build rseq_payload");
+ */
+    if !status.success() {
+        panic!("rseq_payload build failed");
+    }
+
+    // 3. הנחיות ל-Cargo מתי להריץ את ה-build script מחדש
+    println!("cargo:rerun-if-changed=../rseq_payload/src/lib.rs");
+    println!("cargo:rerun-if-changed=../rseq.ld");
+    println!("cargo:rerun-if-changed=../rseq.map");
+    
+    // מוודא שה-binary הראשי יתקשר ל-SO שנבנה
+    let profile = env::var("PROFILE").unwrap();
+    println!("cargo:rustc-link-search=native={}/target/x86_64-unknown-linux-musl/{}/", 
+             root_dir.display(), profile);
+}

@@ -1,0 +1,4 @@
+{
+  global: _rseq_start; _rseq_post_commit; _rseq_abort_ip; rseq_critical_store;
+  local: *;
+};

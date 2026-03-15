@@ -1,0 +1,113 @@
+
+use std::fs::File;
+use std::io::Write;
+use std::os::unix::io::FromRawFd;
+use std::ptr;
+use libc::{dlopen, dlerror, dlsym, memfd_create, RTLD_NOW, RTLD_DEEPBIND, MFD_CLOEXEC};
+use syscalls::{Sysno, syscall};
+use std::ffi::CString;
+use std::ffi::CStr;
+
+// הגדרת ה-ABI של rseq לפי ה-Kernel
+#[repr(C, align(32))]
+struct Rseq {
+    cpu_id_start: u32,
+    cpu_id: u32,
+    rseq_cs: u64,
+    flags: u32,
+}
+
+#[repr(C, align(32))]
+struct RseqCs {
+    version: u32,
+    flags: u32,
+    start_ip: u64,
+    post_commit_offset: u64,
+    abort_ip: u64,
+}
+
+// יצירת מופע rseq לכל Thread (Thread-Local Storage)
+// #[thread_local]
+static mut THREAD_RSEQ: Rseq = Rseq {
+    cpu_id_start: 0,
+    cpu_id: 1, // -1 means uninitialized
+    rseq_cs: 0,
+    flags: 0,
+};
+
+const RSEQ_SIG: u32 = 0x12345678;
+const PAYLOAD: &[u8] = include_bytes!("../../target/release/librseq_payload.so");
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // 1. טעינת ה-Payload מהזיכרון
+    let fd = unsafe { memfd_create(b"rseq_mem\0".as_ptr() as *const i8, MFD_CLOEXEC) };
+    unsafe { File::from_raw_fd(fd).write_all(PAYLOAD)? };
+    let path = format!("/proc/self/fd/{}\0", fd);
+    let handle = unsafe { dlopen(CString::new("target/release/librseq_payload.so").expect("String contains null byte").as_ptr() as *const i8, RTLD_NOW | RTLD_DEEPBIND) };
+    
+    if handle.is_null() { 
+        unsafe{println!("{}", CStr::from_ptr(dlerror()).to_string_lossy());}
+        return Err("dlopen failed {}".into()); }
+
+    // 2. שליפת כתובות מה-ELF המבודד
+    let start_ip = unsafe { dlsym(handle, b"_rseq_start\0".as_ptr() as *const i8) } as u64;
+    let post_commit_ip = unsafe { dlsym(handle, b"_rseq_post_commit\0".as_ptr() as *const i8) } as u64;
+    let abort_ip = unsafe { dlsym(handle, b"_rseq_abort_ip\0".as_ptr() as *const i8) } as u64;
+
+    // 3. הגדרת ה-Critical Section Descriptor
+    static mut CS_DESC: RseqCs = RseqCs {
+        version: 0,
+        flags: 0,
+        start_ip: 0,
+        post_commit_offset: 0,
+        abort_ip: 0,
+    };
+
+    unsafe {
+        CS_DESC.start_ip = start_ip;
+        CS_DESC.post_commit_offset = post_commit_ip - start_ip;
+        CS_DESC.abort_ip = abort_ip;
+    }
+
+    // 4. רישום ה-Thread מול ה-Kernel (syscall 334 ב-x86_64)
+    let rseq_ptr = unsafe { &THREAD_RSEQ as *const _ as usize };
+    let rseq_len = std::mem::size_of::<Rseq>() as usize;
+    
+    unsafe {
+
+         match {
+        syscall!(
+            Sysno::rseq,
+            rseq_ptr,
+            std::mem::size_of::<Rseq>(),
+            0u64,
+            RSEQ_SIG as u64
+        )
+    } {
+        Ok(0) => {},
+        Err(errno) => {
+            panic!("rseq registration failed {}", errno);
+        }
+        _ => {
+            panic!("haaaa");
+        }
+    }
+    }
+
+    // 5. הפעלת ה-RSEQ: קישור ה-CS ל-Thread-Local והרצה
+    unsafe {
+        THREAD_RSEQ.rseq_cs = &CS_DESC as *const _ as u64;
+        
+        let logic_func: unsafe extern "C" fn(*mut u64, u64) = std::mem::transmute(start_ipa;
+        let mut counter: u64 = 0;
+        
+        println!("Executing RSEQ logic...");
+        logic_func(&mut counter, 42);
+        println!("Counter value after RSEQ: {}", counter);
+        
+        // ניקוי (חשוב לפני יציאה או החלפת CS)
+        THREAD_RSEQ.rseq_cs = 0;
+    }
+
+    Ok(())
+}

@@ -1,7 +1,14 @@
-[package]
-name = "rseq-example"
-version = "0.0.1"
-edition = "2024"
+[workspace]
+members = [
+    "rseq_payload",
+    "rseq_main",
+]
+resolver = "2"
 
-[dependencies]
-syscalls = "0.8.1"   
+
+[profile.release]
+lto = "fat"
+strip = true
+opt-level = 3
+panic = "abort"
+codegen-units = 1
