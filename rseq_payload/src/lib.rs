@@ -1,24 +1,85 @@
 #![no_std]
-use core::panic::PanicInfo;
 use core::arch::asm;
-#[link_section = ".rseq_sig"]
-#[no_mangle]
-pub static RSEQ_SIG: u32 = 0x12345678;
+use core::panic::PanicInfo;
 
-#[link_section = ".rseq_logic"]
-#[no_mangle]
-pub unsafe extern "C" fn rseq_critical_store(ptr: *mut u64, val: u64) {
-    // Strings work fine in .so!
-    // In real RSEQ, don't do slow IO here, but for demo:
-    *ptr = val;
-    for i in 1..1_000_000_000u64{ asm!("")}
+// Define the jump buffer size for musl x86_64 (typically 8 words)
+#[repr(C, align(16))]
+pub struct jmp_buf([u64; 8]);
+
+unsafe extern "C" {
+    // musl implementation of setjmp/longjmp
+    pub fn setjmp(env: *mut jmp_buf) -> i32;
+    pub fn longjmp(env: *const jmp_buf, val: i32) -> !;
+    fn write(fd: i32, buf: *const u8, count: usize) -> isize;
 }
 
-#[link_section = ".rseq_abort"]
-#[no_mangle]
+// Thread-local storage to hold the context safely
+// #[thread_local]
+static mut RSEQ_CONTEXT: jmp_buf = jmp_buf([0; 8]);
+
+#[unsafe(link_section = ".rseq_signature")]
+#[unsafe(no_mangle)]
+pub static RSEQ_SIG: u32 = 0x53514552u32;
+
+#[unsafe(link_section = ".rseq_critical")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rseq_critical_store(ptr: *mut u64, rseq_cs: &mut u64, this_cs: u64) {
+    unsafe {
+        *ptr = 0;
+    };
+    match unsafe { setjmp(&raw mut RSEQ_CONTEXT as *mut _) } {
+        0 => {}
+        _ => {}
+    }
+    //start the cs
+    unsafe {
+        *rseq_cs = this_cs;
+
+        *ptr = *ptr + 1;
+    }
+    for _i in 1..100000000u64 {
+        unsafe { asm!("") };
+    }
+
+    commit_action();
+}
+
+#[unsafe(no_mangle)]
+#[inline(never)]
+#[unsafe(link_section = ".rseq_commit")]
+pub fn commit_action() {
+    // This is the very last instruction of the critical section
+    // todo need to find a way to get the exect addr of this call, might need to do naked_asm here?
+    unsafe {
+        asm!("");
+    }
+}
+
+#[unsafe(link_section = ".rseq_abort")]
+#[unsafe(naked)]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn rseq_abort_handler() {
-    println!("a");
-    // Kernel jumps here on preemption
+    core::arch::naked_asm!(
+        ".long 0x53514552",
+        // Kernel jumps here on preemption
+        // this stack is in a invalid state
+        // we can use call as it only add to the stack
+        // but we can't return as the stack register point at the last thing it pointed in the cs
+        // and we don't know what it is
+        "call inner_abort_handler",
+        // if we return from here it will be undefined behavier so it is better to hard crush
+        "ud2"
+    );
+}
+
+#[unsafe(link_section = ".rseq_abort")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn inner_abort_handler() {
+    let msg = b"[RSEQ SO] Abort detected! Jumping to longjmp...\n";
+    unsafe {
+        write(2, msg.as_ptr(), msg.len());
+        longjmp(&raw mut RSEQ_CONTEXT as *mut _, 1);
+    }
 }
 
 #[panic_handler]

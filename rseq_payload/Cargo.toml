@@ -1,7 +1,8 @@
 [package]
 name = "rseq_payload"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
+build = "build.rs"
 
 [lib]
 name = "rseq_payload"
@@ -9,18 +10,14 @@ crate-type = ["cdylib"]
 
 [dependencies]
 
+[profile.dev]
+panic = "abort"
+strip = false
 
 [profile.release]
-# מונע מה-Linker לנסות להוסיף ספריות מערכת או unwind tables
 panic = "abort"
 lto = true
 codegen-units = 1
 incremental = false
-
-[target.'cfg(target_os = "linux")']
-rustflags = [
-    "-C", "link-arg=-nostdlib",         # אל תחבר ספריות מערכת
-    "-C", "link-arg=rseq.ld",         # השתמש ב-Linker Script שלנו
-    "-C", "link-arg=-Map=rseq.map",   # ייצור של קובץ Map מפורט
-    "-C", "relocation-model=pic",       # חובה ל-Shared Object
-]
+opt-level = 3
+strip = false
