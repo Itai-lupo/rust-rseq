@@ -17,12 +17,11 @@
           inherit system;
 
           overlays = [ (import rust-overlay) ];
-          # overlays = [ fenix.overlays.default ];
 
         };
 
-        projectName = "rseq_on_rust";
-        target = "x86_64-linux";
+        projectName = ''rseq_on_rust'';
+        target = ''x86_64-linux'';
 
         toolchain = pkgs.rust-bin.selectLatestNightlyWith (toolchain: toolchain.default.override {
           targets = [ "x86_64-unknown-linux-musl" ];

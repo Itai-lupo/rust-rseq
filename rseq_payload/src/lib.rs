@@ -17,10 +17,6 @@ unsafe extern "C" {
 // #[thread_local]
 static mut RSEQ_CONTEXT: jmp_buf = jmp_buf([0; 8]);
 
-#[unsafe(link_section = ".rseq_signature")]
-#[unsafe(no_mangle)]
-pub static RSEQ_SIG: u32 = 0x53514552u32;
-
 #[unsafe(link_section = ".rseq_critical")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rseq_critical_store(ptr: *mut u64, rseq_cs: &mut u64, this_cs: u64) {
@@ -55,12 +51,29 @@ pub fn commit_action() {
     }
 }
 
+macro_rules! parse_u32 {
+    ($s:expr) => {{
+        let bytes = $s.as_bytes();
+        let mut n = 0;
+        let mut i = 0;
+        while i < bytes.len() {
+            let c = bytes[i];
+            assert!(b'0' <= c && c <= b'9');
+            n = n * 10 + (c - b'0') as u32;
+            i += 1;
+        }
+        n
+    }};
+}
+
+const RSEQ_SIG: u32 = parse_u32!(env!("RSEQ_SIG"));
+
 #[unsafe(link_section = ".rseq_abort")]
 #[unsafe(naked)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rseq_abort_handler() {
     core::arch::naked_asm!(
-        ".long 0x53514552",
+        ".long {sig}",
         // Kernel jumps here on preemption
         // this stack is in a invalid state
         // we can use call as it only add to the stack
@@ -68,7 +81,8 @@ pub unsafe extern "C" fn rseq_abort_handler() {
         // and we don't know what it is
         "call inner_abort_handler",
         // if we return from here it will be undefined behavier so it is better to hard crush
-        "ud2"
+        "ud2",
+        sig = const RSEQ_SIG
     );
 }
 

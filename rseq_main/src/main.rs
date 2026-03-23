@@ -1,45 +1,56 @@
 // #![feature(thread_local)]
 
+pub mod rseq_lib_wrapper;
 pub mod sys_rseq;
+
 use enumflags2::BitFlag;
+use rseq_lib_wrapper::RseqSo;
 use sys_rseq::{RseqCs, RseqFlags, get_thread_rseq_cs_ref, rseq_thread_registor};
 
-use dlopen_rs::{ElfLibrary, OpenFlags, Result};
+macro_rules! parse_u32 {
+    ($s:expr) => {{
+        let bytes = $s.as_bytes();
+        let mut n = 0;
+        let mut i = 0;
+        while i < bytes.len() {
+            let c = bytes[i];
+            assert!(b'0' <= c && c <= b'9');
+            n = n * 10 + (c - b'0') as u32;
+            i += 1;
+        }
+        n
+    }};
+}
 
-const PAYLOAD_SO: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-linux-musl/release/librseq_payload.so");
+const RSEQ_SIG: u32 = parse_u32!(env!("RSEQ_SIG"));
 
-#[cfg(target_arch = "x86_64")]
-const RSEQ_SIG: u32 = 0x53514552u32;
-
-fn main() -> Result<()> {
-    println!("start");
-
-    let lib =
-        ElfLibrary::dlopen_from_binary(PAYLOAD_SO, "librseq_payload.so", OpenFlags::RTLD_NOW)?;
-
+fn main() {
     println!("searching for symbols");
+
+    let rseq_lib: &RseqSo = RseqSo::get();
 
     rseq_thread_registor(RSEQ_SIG, RseqFlags::empty());
 
-    let start_addr = unsafe { *lib.get::<u64>("rseq_start")? };
-    let rseq_cs_function = unsafe { *lib.get::<u64>("rseq_critical_store")? };
-    let post_commit_addr = unsafe { *lib.get::<u64>("rseq_commit_end")? };
-    let abort_addr = unsafe { *lib.get::<u64>("rseq_abort_ip")? };
+    let rseq_cs_function: u64 = rseq_lib.get_function_addr("rseq_critical_store");
 
     println!(
         "loaded rseq so with {} {} {}",
-        start_addr, post_commit_addr, abort_addr
+        rseq_lib.start_section_addr, rseq_lib.commit_section_end, rseq_lib.abort_trampoline_addr
     );
 
     println!("--- RSEQ Initialized ---");
-    println!("Start IP: 0x{:x}", start_addr);
-    println!("Abort IP: 0x{:x}", abort_addr);
+    println!("Start IP: 0x{:x}", rseq_lib.start_section_addr);
+    println!("abort ip: 0x{:x}", rseq_lib.abort_trampoline_addr);
 
-    let post_commit_offset = post_commit_addr - start_addr;
-    let this_rseq_cs = RseqCs::new(start_addr, post_commit_offset, abort_addr, RSEQ_SIG);
+    let post_commit_offset: u64 = rseq_lib.commit_section_end - rseq_lib.start_section_addr;
+    let this_rseq_cs = RseqCs::new(
+        rseq_lib.start_section_addr,
+        post_commit_offset,
+        rseq_lib.abort_trampoline_addr,
+        RSEQ_SIG,
+    );
 
-    let this_rseq_cs_ref = &this_rseq_cs as *const _ as u64;
+    let this_rseq_cs_ref: u64 = &this_rseq_cs as *const _ as u64;
 
     let rseq_func: unsafe extern "C" fn(ptr: *mut u64, rseq_cs: &mut u64, this_rseq_cs: u64) =
         unsafe { std::mem::transmute(rseq_cs_function) };
@@ -54,5 +65,31 @@ fn main() -> Result<()> {
     println!("Counter result: {}", counter);
 
     *rseq_cs_ref = 0;
-    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_rseq_so_loads() {
+        let rseq = RseqSo::get();
+        assert_ne!(rseq.start_section_addr, 0);
+        assert_ne!(rseq.commit_section_end, 0);
+        assert_ne!(rseq.abort_trampoline_addr, 0);
+    }
+
+    #[test]
+    fn test_get_function_addr() {
+        let rseq = RseqSo::get();
+        let addr = rseq.get_function_addr("rseq_start");
+        assert_ne!(addr, 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "Failed to load symbol")]
+    fn test_invalid_symbol_panics() {
+        let rseq = RseqSo::get();
+        rseq.get_function_addr("invalid_symbol");
+    }
 }
