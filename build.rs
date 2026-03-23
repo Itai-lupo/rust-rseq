@@ -24,7 +24,7 @@ fn main() {
         .arg("build")
         .arg("--color=always")
         .arg("--release")
-        .arg("--manifest-path=../rseq_payload/Cargo.toml")
+        .arg("--manifest-path=rseq_payload/Cargo.toml")
         .arg("--target-dir")
         .arg(&target_dir)
         .arg("--locked")

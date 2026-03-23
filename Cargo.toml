@@ -1,9 +1,19 @@
-[workspace]
-members = [
-    "rseq_payload",
-    "rseq_main",
-]
-resolver = "2"
+[package]
+name = "rseq_main"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+syscalls = "0.8.1"
+dlopen-rs = "0.8" 
+nc = "0.9"
+enumflags2 = "0.7"
+
+[build-dependencies]
+build-print = "1.0.1"
+
+[build]
+target = "x86_64-unknown-linux-musl"
 
 
 [profile.release]
@@ -12,4 +22,3 @@ strip = true
 opt-level = 3
 panic = "abort"
 codegen-units = 1
-
