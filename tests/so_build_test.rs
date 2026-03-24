@@ -68,7 +68,7 @@ const RSEQ_SIG: u32 = parse_u32!(env!("RSEQ_SIG"));
 
 #[test]
 fn abort_first_4_bytes_match_rseq_sig() {
-    let lib =  ElfLibrary::dlopen(env!("PAYLOAD_SO"), RSEQ_LIB_FLAGS).unwrap();
+    let lib = ElfLibrary::dlopen(env!("PAYLOAD_SO"), RSEQ_LIB_FLAGS).unwrap();
     let abort_trampoline_addr: *const u64 = unsafe { *lib.get(RSEQ_ABORT_IP).unwrap() };
     let value: u32 =
         unsafe { std::ptr::read((abort_trampoline_addr as *const u8).sub(4) as *const u32) };

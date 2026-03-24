@@ -3,13 +3,13 @@ name = "rseq_payload"
 version = "0.1.0"
 edition = "2024"
 build = "build.rs"
-links = "rseq_payload"
 
 [lib]
 name = "rseq_payload"
 crate-type = ["cdylib"]
 
 [dependencies]
+rseq_utils = { path = "../rseq_utils", default-features = false }
 
 [profile.dev]
 panic = "abort"

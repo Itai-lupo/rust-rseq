@@ -1,5 +1,5 @@
 use dlopen_rs::{ElfLibrary, OpenFlags};
-use std::sync::OnceLock;
+use std::{mem, sync::OnceLock};
 
 const PAYLOAD_SO: &[u8] = include_bytes!(env!("PAYLOAD_SO"));
 
@@ -42,15 +42,15 @@ impl RseqSo {
             abort_trampoline_addr: 0,
         };
 
-        res.start_section_addr = res.get_symbol_wrapper::<u64>(RSEQ_START);
-        res.commit_section_end = res.get_symbol_wrapper::<u64>(RSEQ_COMMIT_END);
-        res.abort_trampoline_addr = res.get_symbol_wrapper::<u64>(RSEQ_ABORT_IP);
+        res.start_section_addr = res.get_symbol_addr(RSEQ_START) as u64;
+        res.commit_section_end = res.get_symbol_addr(RSEQ_COMMIT_END) as u64;
+        res.abort_trampoline_addr = res.get_symbol_addr(RSEQ_ABORT_IP) as u64;
 
         res
     }
 
-    fn get_symbol_wrapper<T>(&self, symbol_name: &str) -> T {
-        match unsafe { self.lib.get::<T>(symbol_name) } {
+    fn get_symbol_addr(&self, symbol_name: &str) -> usize {
+        match unsafe { self.lib.get::<usize>(symbol_name) } {
             Ok(symbol) => unsafe { std::ptr::read(&*symbol) },
             Err(e) => {
                 panic!("Failed to load symbol '{}': {}", symbol_name, e)
@@ -58,7 +58,20 @@ impl RseqSo {
         }
     }
 
-    pub fn get_function_addr(&self, fun_name: &str) -> u64 {
-        self.get_symbol_wrapper::<u64>(fun_name)
+    pub fn get_function_ptr<F>(&self, fun_name: &str) -> F
+    where
+        F: Copy,
+    {
+        match unsafe { self.lib.get::<*const ()>(fun_name) } {
+            Ok(symbol) => {
+                // symbol is a wrapper around the pointer.
+                // We dereference the symbol to get the *const () address,
+                // then transmute that address into the function type F.
+                unsafe { mem::transmute_copy(&*symbol) }
+            }
+            Err(e) => {
+                panic!("Failed to load symbol '{}': {}", fun_name, e);
+            }
+        }
     }
 }

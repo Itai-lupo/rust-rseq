@@ -41,13 +41,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rseq_payload"
-version = "0.1.0"
-dependencies = [
- "rseq_utils",
-]
-
-[[package]]
 name = "rseq_utils"
 version = "0.1.0"
 dependencies = [
