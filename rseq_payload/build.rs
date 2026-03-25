@@ -10,7 +10,6 @@ fn main() {
     }
 
     println!("cargo:rustc-link-arg=-T{}", linker_script_path.display());
-
     println!("cargo:rustc-link-arg=-z");
     println!("cargo:rustc-link-arg=nodelete");
     println!("cargo:rustc-target-feature=+crt-static");

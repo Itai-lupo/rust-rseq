@@ -11,9 +11,6 @@ crate-type = ["cdylib"]
 [dependencies]
 rseq_utils = { path = "../rseq_utils", default-features = false }
 
-[profile.dev]
-panic = "abort"
-strip = false
 
 [profile.release]
 panic = "abort"
@@ -22,3 +19,4 @@ codegen-units = 1
 incremental = false
 opt-level = 3
 strip = false
+

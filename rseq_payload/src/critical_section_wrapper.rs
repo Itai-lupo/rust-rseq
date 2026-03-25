@@ -3,8 +3,7 @@ use rseq_utils::RseqCsInput;
 
 use core::ptr;
 
-// Thread-local storage to hold the context safely
-// #[thread_local]
+#[thread_local]
 pub static mut RSEQ_CONTEXT: jmp_buf = jmp_buf([0; 8]);
 
 #[unsafe(link_section = ".rseq_abort")]
@@ -35,7 +34,7 @@ pub fn rseq_cs_wrapper_inner(rseq_data: &mut RseqCsInput) {
     }
 
     unsafe { (rseq_data.cs_callback)(rseq_data.user_data) };
-    
+
     unsafe { ptr::write_volatile(&mut (*rseq_data.rseq).rseq_cs, 0) };
     panic!("when rseq cs finish it should use longjmp to get back it should never get here.");
 }
@@ -44,17 +43,38 @@ pub fn rseq_cs_wrapper_inner(rseq_data: &mut RseqCsInput) {
 #[inline(never)]
 #[unsafe(link_section = ".rseq_abort")]
 pub fn rseq_end_handler() {
-    let msg = b"[RSEQ SO] rseq ended! Jumping to longjmp...\n";
+    /*  let msg = b"[RSEQ SO] rseq ended! Jumping to longjmp...\n";
     unsafe {
-        // write(2, msg.as_ptr(), msg.len());
-    }
+        write(2, msg.as_ptr(), msg.len());
+    } */
     jmp_to_rseq_start(2);
 }
 
 #[unsafe(naked)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rseq_end_handler_call_marker() {
-    core::arch::naked_asm!("call rseq_end_handler")
+    core::arch::naked_asm!(
+        "jmp 91f",
+        ".long 0xDEADC0DE",
+        "91:",
+        ".long 0xABCDEFFF",
+        // the call might be diffrent bytecode so it needs to be after the magic itself
+        // we can put whatever code we want here and it will be outside the rseq cs
+        "call rseq_end_handler",
+    )
+}
+
+#[macro_export]
+macro_rules! rseq_cs_end {
+    () => {
+        asm!(
+            "jmp 91f",
+            ".long 0xDEADC0DE",
+            "91:",
+            options(nostack, preserves_flags)
+        );
+        $crate::critical_section_wrapper::rseq_end_handler();
+    };
 }
 
 #[unsafe(link_section = ".rseq_abort")]

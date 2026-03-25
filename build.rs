@@ -1,58 +1,117 @@
 use build_print::{error, info};
-use object::{Object, ObjectSection, ObjectSymbol};
+use object::{File, Object, ObjectSection, ObjectSymbol, SymbolKind};
 use std::env;
+use std::error::Error;
 use std::fs;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 use std::process::Command;
 
-#[unsafe(naked)]
-extern "C" fn ret_marker() {
-    core::arch::naked_asm!("ret");
+type Result<T> = std::result::Result<T, Box<dyn Error>>;
+
+const POST_COMMIT_OFFSET_MARKER_SYMBOL_NAME: &str = "rseq_end_handler_call_marker";
+const POST_COMMIT_OFFSET_MARKER_ENDS_WITH: u32 = 0xABCDEFFFu32;
+
+fn find_magic_offset_exactly_once(data: &[u8], magic: &[u8]) -> Result<usize> {
+    let mut matches = data
+        .windows(magic.len())
+        .enumerate()
+        .filter(|(_, window)| *window == magic)
+        .map(|(i, _)| i);
+
+    let first = matches.next().ok_or("didn't find magic in symbol")?;
+
+    if matches.next().is_some() {
+        return Err("magic found multiple times".into());
+    }
+
+    Ok(first)
 }
 
-fn extract_ret_bytes() -> &'static [u8] {
-    unsafe { std::slice::from_raw_parts(ret_marker as *const u8, 1) }
+fn get_symbol_bytes<'a>(file: &'a File<'a>, symbol_name: &str) -> Result<&'a [u8]> {
+    let symbol = file
+        .symbol_by_name(symbol_name)
+        .ok_or_else(|| format!("Symbol '{}' not found", symbol_name))?;
+
+    let section_index = symbol
+        .section()
+        .index()
+        .ok_or_else(|| format!("Symbol '{}' has no associated section", symbol_name))?;
+
+    let section = file.section_by_index(section_index)?;
+
+    let data = section
+        .data_range(symbol.address(), symbol.size())?
+        .ok_or_else(|| {
+            format!(
+                "Data for symbol '{}' is not present in the file",
+                symbol_name
+            )
+        })?;
+
+    Ok(data)
 }
 
-fn find_functions_in_section(so_path: &str, section_name: &str) -> Vec<(String, u64, Vec<u8>)> {
-    let data = fs::read(so_path).expect("Failed to read .so");
-    let file = object::File::parse(&*data).expect("Failed to parse ELF");
+fn get_post_commit_offset_marker_value<'a>(obj_file: &'a File<'a>) -> Result<&'a [u8]> {
+    let sym_data = get_symbol_bytes(obj_file, POST_COMMIT_OFFSET_MARKER_SYMBOL_NAME)?;
 
-    let mut functions = Vec::new();
-    for sym in file.symbols() {
-        if sym.kind() != object::SymbolKind::Text || sym.size() == 0 {
+    let magic_bytes = POST_COMMIT_OFFSET_MARKER_ENDS_WITH.to_ne_bytes();
+
+    let magic_pos = find_magic_offset_exactly_once(sym_data, &magic_bytes)?;
+
+    Ok(&sym_data[..magic_pos])
+}
+
+fn get_symbol_offsets(
+    file: &object::File,
+    section_name: &str,
+    magic: &[u8],
+) -> Result<Vec<(String, usize)>> {
+    let section_index = file
+        .section_by_name(section_name)
+        .ok_or_else(|| format!("Section '{}' not found", section_name))?
+        .index();
+
+    let mut results = Vec::new();
+    for symbol in file.symbols() {
+        if symbol.section().index() != Some(section_index) {
             continue;
         }
-        let section = sym.section();
-        if let Ok(section) = file.section_by_index(section.index().unwrap()) {
-            if section.name() == Ok(section_name) {
-                let addr = sym.address();
-                let size = sym.size();
-                if let Ok(Some(code)) = section.data_range(addr, size) {
-                    let name = sym.name().unwrap_or("<unknown>").to_string();
-                    functions.push((name, addr, code.to_vec()));
-                }
-            }
+
+        match process_symbol(file, &symbol, magic) {
+            Ok(Some(res)) => results.push(res),
+            Ok(None) => continue,
+            Err(e) => return Err(e),
         }
     }
-    functions
+
+    Ok(results)
 }
 
-fn find_single_ret_offset(code: &[u8], ret_bytes: &[u8]) -> Option<u64> {
-    let matches: Vec<usize> = code
-        .windows(ret_bytes.len())
-        .enumerate()
-        .filter_map(|(i, w)| if w == ret_bytes { Some(i) } else { None })
-        .collect();
-    if matches.len() == 1 {
-        Some(matches[0] as u64)
-    } else {
-        None
+fn process_symbol(
+    file: &object::File,
+    symbol: &object::Symbol,
+    magic: &[u8],
+) -> Result<Option<(String, usize)>> {
+    if symbol.kind() != SymbolKind::Text || symbol.size() == 0 {
+        return Ok(None);
     }
+
+    let name = symbol.name()?;
+    let symbol_data = get_symbol_bytes(file, name)?;
+    info!(
+        "Searching in symbol '{}' (size: {}) for magic: {:02x?}",
+        name,
+        symbol.size(),
+        magic
+    );
+
+    let offset = find_magic_offset_exactly_once(symbol_data, magic)?;
+
+    Ok(Some((name.to_string(), offset)))
 }
 
-fn generate_output(results: Vec<(String, u64)>) {
+fn generate_output(results: Vec<(String, usize)>) {
     let out_dir = std::env::var("OUT_DIR").unwrap();
     let dest_path = std::path::Path::new(&out_dir).join("ret_offsets.rs");
     let out_file = fs::File::create(&dest_path).unwrap();
@@ -65,16 +124,15 @@ fn generate_output(results: Vec<(String, u64)>) {
     // writer.flush();
 }
 
-fn process_functions_in_so(so_path: &str, section_name: &str) {
-    let ret_bytes = extract_ret_bytes();
-    let functions = find_functions_in_section(so_path, section_name);
-    let results: Vec<_> = functions
-        .into_iter()
-        .filter_map(|(name, _addr, code)| {
-            find_single_ret_offset(&code, ret_bytes).map(|offset| (name, offset))
-        })
-        .collect();
-    generate_output(results);
+fn process_functions_in_so(so_path: &str) -> Result<()> {
+    let data = fs::read(so_path).expect("Failed to read .so");
+    let obj_file = object::File::parse(&*data).expect("Failed to parse ELF");
+
+    let magic = get_post_commit_offset_marker_value(&obj_file)?;
+    let result = get_symbol_offsets(&obj_file, ".text.rseq_commit", &magic)?;
+
+    generate_output(result);
+    Ok(())
 }
 
 fn main() {
@@ -82,6 +140,7 @@ fn main() {
     let target_dir = out_dir.join("inner_target");
 
     // Build the inner lib in a separate target dir to avoid cargo lock contention
+    unsafe { env::set_var("RUSTFLAGS", "-C relocation-model=pic") };
     let status = Command::new("cargo")
         .arg("build")
         .arg("--color=always")
@@ -109,7 +168,12 @@ fn main() {
     println!("cargo:rustc-env=PAYLOAD_SO={}", dest.display());
     println!("cargo:rerun-if-changed=../rseq_payload/");
 
-    process_functions_in_so(dest.display().to_string().as_str(), ".text");
+    match process_functions_in_so(dest.display().to_string().as_str()) {
+        Ok(_) => {}
+        Err(e) => {
+            error!("failed to gen post commit offsets with error: {}", e);
 
-    // println!("cargo:rustc-env=SHARED_VALUE={}", shared_value);
+            std::process::exit(1);
+        }
+    }
 }

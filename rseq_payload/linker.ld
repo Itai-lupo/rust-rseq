@@ -15,12 +15,15 @@ SECTIONS {
         *(.gnu.linkonce.t.*)
 
         KEEP(*(.rseq_critical))
-        KEEP(*(.rseq_commit))
-        rseq_commit_end = .;
       
 
     } :text
-    
+
+    .text.rseq_commit : {
+        KEEP(*(.rseq_commit))
+        rseq_commit_end = .;
+    } :text
+
     .rseq_abort : {
         rseq_abort_ip = . + 4;
         KEEP(*(.rseq_abort))

@@ -1,6 +1,6 @@
 use crate::critical_section_wrapper::jmp_to_rseq_start;
 
-use crate::musl_binding::write;
+// use crate::musl_binding::write;
 
 use rseq_utils::RSEQ_SIG;
 
@@ -25,7 +25,7 @@ pub unsafe extern "C" fn rseq_abort_handler() {
 #[unsafe(link_section = ".rseq_abort")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn inner_abort_handler() {
-    let msg = b"[RSEQ SO] Abort detected! Jumping to longjmp...\n";
+    // let msg = b"[RSEQ SO] Abort detected! Jumping to longjmp...\n";
     // unsafe { write(2, msg.as_ptr(), msg.len()) };
 
     jmp_to_rseq_start(1);

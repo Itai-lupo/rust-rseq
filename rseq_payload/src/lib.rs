@@ -1,4 +1,5 @@
 #![no_std]
+#![feature(thread_local)]
 use core::arch::asm;
 use core::panic::PanicInfo;
 
@@ -23,11 +24,28 @@ fn rseq_cs_func(ptr: *mut u64) {
 #[inline(never)]
 #[unsafe(link_section = ".rseq_commit")]
 pub fn commit_action(ptr: *mut u64) {
-    // This is the very last instruction of the critical section
-    // todo need to find a way to get the exect addr of this call, might need to do naked_asm here?
     unsafe {
         *ptr = *ptr + 1;
-        asm!("call rseq_end_handler");
+        rseq_cs_end!();
+    }
+}
+#[unsafe(no_mangle)]
+#[inline(never)]
+#[unsafe(link_section = ".rseq_commit")]
+pub fn commit_action2(ptr: *mut u64) {
+    unsafe {
+        *ptr = *ptr + 5;
+        rseq_cs_end!();
+    }
+}
+
+#[unsafe(no_mangle)]
+#[inline(never)]
+#[unsafe(link_section = ".rseq_commit")]
+pub fn commit_action3(ptr: *mut u64) {
+    unsafe {
+        *ptr = 7 * *ptr;
+        rseq_cs_end!();
     }
 }
 
