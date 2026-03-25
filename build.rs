@@ -1,4 +1,5 @@
 use build_print::{error, info};
+use memmap2::Mmap;
 use object::{File, Object, ObjectSection, ObjectSymbol, SymbolKind};
 use std::env;
 use std::error::Error;
@@ -99,39 +100,35 @@ fn process_symbol(
 
     let name = symbol.name()?;
     let symbol_data = get_symbol_bytes(file, name)?;
-    info!(
-        "Searching in symbol '{}' (size: {}) for magic: {:02x?}",
-        name,
-        symbol.size(),
-        magic
-    );
-
     let offset = find_magic_offset_exactly_once(symbol_data, magic)?;
 
     Ok(Some((name.to_string(), offset)))
 }
 
-fn generate_output(results: Vec<(String, usize)>) {
+fn generate_output(results: &mut Vec<(String, usize)>) {
     let out_dir = std::env::var("OUT_DIR").unwrap();
-    let dest_path = std::path::Path::new(&out_dir).join("ret_offsets.rs");
+    let dest_path = std::path::Path::new(&out_dir).join("post_commit_offsets.rs");
     let out_file = fs::File::create(&dest_path).unwrap();
     let mut writer = BufWriter::new(out_file);
-    write!(writer, "pub const RET_OFFSETS: &[(&str, u64)] = &[").unwrap();
+    results.sort_by(|a, b| a.0.cmp(&b.0));
+
+    writeln!(writer, "pub const RSEQ_CS_POST_COMMIT_OFFSETS: &[(&str, u64)] = &[").unwrap();
     for (name, offset) in results {
-        write!(writer, "    (\"{}\", {}),", name, offset).unwrap();
+        writeln!(writer, "    (\"{}\", {}),", name, offset).unwrap();
     }
-    write!(writer, "];").unwrap();
-    // writer.flush();
+    writeln!(writer, "];").unwrap();
 }
 
 fn process_functions_in_so(so_path: &str) -> Result<()> {
-    let data = fs::read(so_path).expect("Failed to read .so");
+    let file_handle = fs::File::open(so_path)?;
+    let data = unsafe { Mmap::map(&file_handle)? };
+    // let data = fs::read(so_path).expect("Failed to read .so");
     let obj_file = object::File::parse(&*data).expect("Failed to parse ELF");
 
     let magic = get_post_commit_offset_marker_value(&obj_file)?;
-    let result = get_symbol_offsets(&obj_file, ".text.rseq_commit", &magic)?;
+    let mut result = get_symbol_offsets(&obj_file, ".text.rseq_commit", &magic)?;
 
-    generate_output(result);
+    generate_output(&mut result);
     Ok(())
 }
 
@@ -140,7 +137,6 @@ fn main() {
     let target_dir = out_dir.join("inner_target");
 
     // Build the inner lib in a separate target dir to avoid cargo lock contention
-    unsafe { env::set_var("RUSTFLAGS", "-C relocation-model=pic") };
     let status = Command::new("cargo")
         .arg("build")
         .arg("--color=always")

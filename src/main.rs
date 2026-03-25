@@ -2,12 +2,21 @@
 pub mod rseq_lib_wrapper;
 pub mod sys_rseq;
 
+include!(concat!(env!("OUT_DIR"), "/post_commit_offsets.rs"));
+
 use std::ffi::c_void;
 
 use enumflags2::BitFlag;
 use rseq_lib_wrapper::RseqSo;
 use rseq_utils::{RSEQ_SIG, RseqCsInput};
 use sys_rseq::{RseqCs, RseqCsExt, RseqFlags, get_thread_rseq, rseq_thread_registor};
+
+pub fn find_offset(name: &str) -> Option<u64> {
+    RSEQ_CS_POST_COMMIT_OFFSETS
+        .binary_search_by_key(&name, |&(n, _)| n)
+        .ok()
+        .map(|index| RSEQ_CS_POST_COMMIT_OFFSETS[index].1)
+}
 
 fn main() {
     println!("searching for symbols");
@@ -19,7 +28,9 @@ fn main() {
     let rseq_cs_wrapper_function: fn(&mut RseqCsInput) =
         rseq_lib.get_function_ptr("rseq_cs_wrapper");
 
-    let post_commit_offset: u64 = rseq_lib.commit_section_end - rseq_lib.start_section_addr;
+    let commit_function = rseq_lib.get_symbol_addr("commit_action") as u64;
+
+    let post_commit_offset: u64 = commit_function- rseq_lib.start_section_addr + find_offset("commit_action").unwrap();
     let this_rseq_cs = RseqCs::new(
         rseq_lib.start_section_addr,
         post_commit_offset,

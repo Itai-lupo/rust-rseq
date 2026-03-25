@@ -49,7 +49,7 @@ impl RseqSo {
         res
     }
 
-    fn get_symbol_addr(&self, symbol_name: &str) -> usize {
+    pub fn get_symbol_addr(&self, symbol_name: &str) -> usize {
         match unsafe { self.lib.get::<usize>(symbol_name) } {
             Ok(symbol) => unsafe { std::ptr::read(&*symbol) },
             Err(e) => {

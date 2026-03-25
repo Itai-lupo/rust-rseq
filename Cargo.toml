@@ -13,10 +13,14 @@ rseq_utils = { path = "rseq_utils" }
 [build-dependencies]
 build-print = "1.0.1"
 object = "0.38.1"
+memmap2 = "0.9"
+
 
 [build]
 target = "x86_64-unknown-linux-musl"
 
+[profile.dev.build-override]
+opt-level = 3
 
 [profile.release]
 lto = "fat"
