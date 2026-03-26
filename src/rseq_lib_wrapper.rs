@@ -17,7 +17,7 @@ const RSEQ_START: &str = "rseq_start";
 const RSEQ_COMMIT_END: &str = "rseq_commit_end";
 const RSEQ_ABORT_IP: &str = "rseq_abort_ip";
 
-const RSEQ_LIB_FLAGS: OpenFlags = OpenFlags::RTLD_NOW;
+// const RSEQ_LIB_FLAGS: OpenFlags = OpenFlags::RTLD_NOW | OpenFlags::RTLD_NODELETE | OpenFlags::RTLD_LOCAL;
 
 impl RseqSo {
     pub fn get() -> &'static Self {
@@ -27,7 +27,7 @@ impl RseqSo {
 
     fn init() -> Self {
         let lib = match {
-            ElfLibrary::dlopen_from_binary(PAYLOAD_SO, "librseq_payload.so", RSEQ_LIB_FLAGS)
+            ElfLibrary::dlopen_from_binary(PAYLOAD_SO, "librseq_payload.so", OpenFlags::RTLD_NOW | OpenFlags::RTLD_NODELETE | OpenFlags::RTLD_LOCAL)
         } {
             Ok(lib) => lib,
             Err(e) => {
@@ -73,5 +73,33 @@ impl RseqSo {
                 panic!("Failed to load symbol '{}': {}", fun_name, e);
             }
         }
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_rseq_so_loads() {
+        let rseq = RseqSo::get();
+        assert_ne!(rseq.start_section_addr, 0);
+        assert_ne!(rseq.commit_section_end, 0);
+        assert_ne!(rseq.abort_trampoline_addr, 0);
+    }
+
+    #[test]
+    fn test_get_function_addr() {
+        let rseq = RseqSo::get();
+        let addr = rseq.get_symbol_addr("rseq_start");
+        assert_ne!(addr, 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "Failed to load symbol")]
+    fn test_invalid_symbol_panics() {
+        let rseq = RseqSo::get();
+        rseq.get_symbol_addr("invalid_symbol");
     }
 }

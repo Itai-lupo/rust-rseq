@@ -1,6 +1,6 @@
 use syscalls::{Errno, Sysno, syscall};
 
-use enumflags2::BitFlags;
+use enumflags2::{BitFlag, BitFlags};
 pub use rseq_utils::rseq_types::{Rseq, RseqCpuIdState, RseqCs, RseqCsFlags, RseqFlags};
 
 use rseq_utils::RSEQ_SIG;
@@ -48,14 +48,32 @@ pub fn sys_rseq(rseq_ptr: usize, flags: u32, rseq_sig: u32) -> Result<usize, Err
     }
 }
 
-pub fn rseq_thread_registor(rseq_sig: u32, flags: BitFlags<RseqFlags>) {
+pub fn rseq_thread_registor(flags: BitFlags<RseqFlags>) {
     let rseq = get_thread_rseq();
     let rseq_addr = rseq as usize;
 
     let cpu_id = unsafe { (*rseq).cpu_id };
     assert_eq!(cpu_id, RseqCpuIdState::Uninitialized as u32);
 
-    match { sys_rseq(rseq_addr, flags.bits(), rseq_sig) } {
+    match { sys_rseq(rseq_addr, flags.bits(), RSEQ_SIG) } {
+        Ok(0) => {}
+        Err(errno) => {
+            panic!("rseq registration failed {}", errno);
+        }
+        _ => {
+            panic!("this shouldn't happen");
+        }
+    }
+}
+
+pub fn rseq_thread_unregistor() {
+    let rseq = get_thread_rseq();
+    let rseq_addr = rseq as usize;
+
+    let cpu_id = unsafe { (*rseq).cpu_id };
+    assert_ne!(cpu_id, RseqCpuIdState::Uninitialized as u32);
+
+    match { sys_rseq(rseq_addr, RseqFlags::Unregister as u32, RSEQ_SIG) } {
         Ok(0) => {}
         Err(errno) => {
             panic!("rseq registration failed {}", errno);
@@ -82,6 +100,7 @@ pub fn get_thread_rseq() -> *mut Rseq {
     unsafe {
         if !IS_RSEQ_INIT {
             IS_RSEQ_INIT = true;
+            rseq_thread_registor(RseqFlags::empty());
         }
 
         std::ptr::addr_of_mut!(RSEQ)

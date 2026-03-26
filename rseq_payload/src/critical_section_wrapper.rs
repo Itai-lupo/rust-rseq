@@ -3,16 +3,20 @@ use rseq_utils::RseqCsInput;
 
 use core::ptr;
 
+// Use the generated jmp_buf type
+// let mut buf: bindings::jmp_buf = unsafe { std::mem::MaybeUninit::zeroed().assume_init() };
+
 #[thread_local]
-pub static mut RSEQ_CONTEXT: jmp_buf = jmp_buf([0; 8]);
+pub static mut RSEQ_CONTEXT: jmp_buf =[unsafe { core::mem::MaybeUninit::zeroed().assume_init() }];
 
 #[unsafe(link_section = ".rseq_abort")]
+#[inline(never)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rseq_cs_wrapper(rseq_data: &mut RseqCsInput) {
     // if there is an abort or the rseq finshed we return here,
     // this has to be out side of the cs to prevent abort after finish bugs
     // this
-    match unsafe { setjmp(&raw mut RSEQ_CONTEXT as *mut _) } {
+    match unsafe { setjmp(&raw mut RSEQ_CONTEXT[0] ) } {
         0 => {}
         2 => {
             unsafe { ptr::write_volatile(&mut (*rseq_data.rseq).rseq_cs, 0) };

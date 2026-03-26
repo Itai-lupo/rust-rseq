@@ -15,9 +15,8 @@ build-print = "1.0.1"
 object = "0.38.1"
 memmap2 = "0.9"
 
-
-[build]
-target = "x86_64-unknown-linux-musl"
+[dev-dependencies]
+rstest = "0.26.1"
 
 [profile.dev.build-override]
 opt-level = 3
@@ -28,3 +27,7 @@ strip = true
 opt-level = 3
 panic = "abort"
 codegen-units = 1
+
+[profile.dev]
+panic = "unwind"
+

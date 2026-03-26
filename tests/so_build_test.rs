@@ -2,20 +2,19 @@ use std::path::Path;
 use std::process::Command;
 
 use dlopen_rs::{ElfLibrary, OpenFlags};
+use rseq_utils::RSEQ_SIG;
 
 #[test]
 fn so_is_built() {
     const PAYLOAD_SO: &str = env!("PAYLOAD_SO");
     let so_path = Path::new(PAYLOAD_SO);
 
-    // Check if file exists
     assert!(
         so_path.exists(),
         "Shared library not found at {:?}",
         so_path
     );
 
-    // Optional: Verify it's a valid ELF shared object
     let output = Command::new("file")
         .arg(&so_path)
         .output()
@@ -48,23 +47,6 @@ fn so_has_required_symbols() {
     let abort: u64 = unsafe { *lib.get(RSEQ_ABORT_IP).unwrap() };
     assert_ne!(abort, 0);
 }
-
-macro_rules! parse_u32 {
-    ($s:expr) => {{
-        let bytes = $s.as_bytes();
-        let mut n = 0;
-        let mut i = 0;
-        while i < bytes.len() {
-            let c = bytes[i];
-            assert!(b'0' <= c && c <= b'9');
-            n = n * 10 + (c - b'0') as u32;
-            i += 1;
-        }
-        n
-    }};
-}
-
-const RSEQ_SIG: u32 = parse_u32!(env!("RSEQ_SIG"));
 
 #[test]
 fn abort_first_4_bytes_match_rseq_sig() {

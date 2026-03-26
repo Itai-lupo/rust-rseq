@@ -45,6 +45,8 @@
           };
 
           nativeBuildInputs = [
+            pkgs.clang
+            pkgs.llvmPackages.libclang
             pkgs.musl
             pkgs.llvmPackages.bintools
           ];
@@ -59,11 +61,16 @@
         devShells.default = craneLib.devShell {
           RUST_BACKTRACE = "1";
           NIX_CFLAGS_LINK = "-fuse-ld=lld";
+          LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
+         
+
           packages = with pkgs; [
+            clang
             just
             rustfmt
             rust-analyzer
             llvmPackages.bintools
+            llvmPackages.libclang
           ];
         };
       }

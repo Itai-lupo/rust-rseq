@@ -10,7 +10,10 @@ crate-type = ["cdylib"]
 
 [dependencies]
 rseq_utils = { path = "../rseq_utils", default-features = false }
+cty = "0.2"
 
+[build-dependencies]
+bindgen = "0.72"
 
 [profile.release]
 panic = "abort"

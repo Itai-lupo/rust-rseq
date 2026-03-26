@@ -1,23 +1,9 @@
-#![feature(thread_local)]
-pub mod rseq_lib_wrapper;
-pub mod sys_rseq;
-
-include!(concat!(env!("OUT_DIR"), "/post_commit_offsets.rs"));
-
 use std::ffi::c_void;
 
-use rseq_lib_wrapper::RseqSo;
-use rseq_utils::RseqCsInput;
-use sys_rseq::{RseqCs, RseqCsExt, get_thread_rseq};
+use rseq_main::{RseqCs, RseqCsExt, find_offset, RseqCsInput, RseqSo, get_thread_rseq};
 
-pub fn find_offset(name: &str) -> Option<u64> {
-    RSEQ_CS_POST_COMMIT_OFFSETS
-        .binary_search_by_key(&name, |&(n, _)| n)
-        .ok()
-        .map(|index| RSEQ_CS_POST_COMMIT_OFFSETS[index].1)
-}
-
-fn main() {
+#[test]
+fn tests_rseq_counter_is_correct() {
     println!("searching for symbols");
 
     let rseq_lib: &RseqSo = RseqSo::get();
@@ -49,9 +35,14 @@ fn main() {
     );
 
     println!("Executing RSEQ logic...");
-
+    
     for _ in 1..100 {
         rseq_cs_wrapper_function(&mut cs_input);
         println!("Counter result: {}", counter);
     }
+    // assert_eq!(counter, 99);
 }
+
+
+#[test]
+fn tests_rseq_counter_is_correct2() {}

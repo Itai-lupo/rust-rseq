@@ -5,7 +5,29 @@ use core::panic::PanicInfo;
 
 mod abort_handler;
 mod critical_section_wrapper;
+
+#[allow(non_upper_case_globals)]
+#[allow(non_camel_case_types)]
+#[allow(non_snake_case)]
+#[allow(dead_code)]
+#[allow(improper_ctypes)]
 mod musl_binding;
+
+use core::alloc::{GlobalAlloc, Layout};
+
+struct NoAlloc;
+unsafe impl GlobalAlloc for NoAlloc {
+    unsafe fn alloc(&self, _layout: Layout) -> *mut u8 { panic!("heap allocation disabled") }
+    unsafe fn alloc_zeroed(&self, _layout: Layout) -> *mut u8 { panic!("heap allocation disabled") }
+    unsafe fn dealloc(&self, _ptr: *mut u8, _layout: Layout) { }
+    unsafe fn realloc(&self, _ptr: *mut u8, _layout: Layout, _new_size: usize) -> *mut u8 { panic!("heap allocation disabled") }
+}
+
+
+// make sure there arn't any non stack allocation within the rseq
+#[global_allocator]
+static ALLOC: NoAlloc = NoAlloc;
+
 
 #[unsafe(link_section = ".rseq_critical")]
 #[unsafe(no_mangle)]
