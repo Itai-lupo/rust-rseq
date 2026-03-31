@@ -4,12 +4,13 @@ use object::{File, Object, ObjectSection, ObjectSymbol, SymbolKind};
 use std::env;
 use std::error::Error;
 use std::fs;
-use std::io::{BufWriter, Write};
-use std::path::PathBuf;
+use std::io::{BufRead, BufReader, BufWriter, Write};
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
+// --------------------- post commit offsets table code gen ---------------------------------
 const POST_COMMIT_OFFSET_MARKER_SYMBOL_NAME: &str = "rseq_end_handler_call_marker";
 const POST_COMMIT_OFFSET_MARKER_ENDS_WITH: u32 = 0xABCDEFFFu32;
 
@@ -136,9 +137,52 @@ fn process_functions_in_so(so_path: &str) -> Result<()> {
     Ok(())
 }
 
+// ------------------------- rseq macro api handle ------------------------------------------
+pub fn generate_payload_source(snippet_dir: &Path, output_file: &Path) -> Result<()> {
+    let mut found_snippets = false;
+
+    let mut output = fs::File::create(output_file).expect("Failed to create combined file");
+
+    if let Ok(entries) = fs::read_dir(snippet_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let name = path.file_name().unwrap().to_str().unwrap();
+
+            if name.starts_with("rseq_") && name.ends_with(".rs") {
+                writeln!(output, "\n// --- Start: {} ---", name).ok();
+
+                let file = fs::File::open(&path).expect("Failed to open snippet");
+                let reader = BufReader::new(file);
+
+                for line in reader.lines() {
+                    let line = line.expect("Failed to read line");
+                    writeln!(output, "{}", line).expect("Failed to write line");
+                }
+
+                writeln!(output, "\n// --- End: {} ---\n", name).ok();
+                found_snippets = true;
+            }
+        }
+    }
+
+    if !found_snippets {
+        writeln!(output, "// No RSEQ tasks defined yet.\n").ok();
+    }
+
+    Ok(())
+}
+
 fn main() {
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
     let target_dir = out_dir.join("inner_target");
+
+    let snippet_path = std::path::Path::new(&out_dir);
+    let combined_source = snippet_path.join("all_user_tasks.rs");
+
+    println!("cargo:rerun-if-changed={}", out_dir.display());
+
+    generate_payload_source(snippet_path, &combined_source)
+        .expect("Failed to generate combined RSEQ source");
 
     // Build the inner lib in a separate target dir to avoid cargo lock contention
     let status = Command::new("cargo")
@@ -148,6 +192,7 @@ fn main() {
         .arg("--manifest-path=rseq_payload/Cargo.toml")
         .arg("--target-dir")
         .arg(&target_dir)
+        .env("USER_TASKS_PATH", &combined_source)
         .status()
         .expect("Failed to start cargo");
 
@@ -167,6 +212,8 @@ fn main() {
     // Make path available to code
     println!("cargo:rustc-env=PAYLOAD_SO={}", dest.display());
     println!("cargo:rerun-if-changed=../rseq_payload/");
+    println!("cargo:rerun-if-changed=src");
+    println!("cargo:rerun-if-changed=build.rs");
 
     match process_functions_in_so(dest.display().to_string().as_str()) {
         Ok(_) => {}

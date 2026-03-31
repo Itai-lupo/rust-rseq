@@ -77,6 +77,9 @@ pub fn commit_action3(ptr: *mut u64) {
     }
 }
 
+#[cfg(has_user_tasks)]
+include!(concat!(env!("OUT_DIR"), "/all_user_tasks.rs"));
+
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
     loop {}

@@ -1,6 +1,41 @@
 use std::ffi::c_void;
 
-use rseq_main::{RseqCs, RseqCsExt, RseqCsInput, RseqSo, find_offset, get_thread_rseq};
+use rseq_main::rseq_context;
+use rseq_main::{RseqCs, RseqCsExt, RseqCsInput, RseqSo, RseqTask, find_offset, get_thread_rseq};
+
+#[macro_export]
+macro_rules! rseq_cs_end {
+    () => {
+        asm!(
+            "jmp 91f",
+            ".long 0xDEADC0DE",
+            "91:",
+            options(nostack, preserves_flags)
+        );
+        $crate::critical_section_wrapper::rseq_end_handler();
+    };
+}
+
+rseq_context! {
+    name = MY_COUNTER,
+
+    helpers = {
+        use core::ffi::c_void;
+        fn internal_add(a: u32, b: u32) -> u32 { a + b }
+    },
+
+    commit = fn update_log(res: *mut u64) {
+        unsafe{
+            *res = *res + 1;
+        }
+        rseq_cs_end!();
+    },
+
+    cs = |ctx: *mut c_void| {
+        update_log(ctx as *mut u64);
+       ctx
+    }
+}
 
 #[test]
 fn tests_rseq_counter_is_correct() {
@@ -44,4 +79,15 @@ fn tests_rseq_counter_is_correct() {
 }
 
 #[test]
-fn tests_rseq_counter_is_correct2() {}
+fn tests_rseq_counter_is_correct2() {
+    let mut data: u32 = 0;
+
+    for _ in 1..101 {
+    unsafe {
+        MY_COUNTER.run(&mut data as *mut u32 as *mut c_void);
+    }
+    }
+
+    assert_eq!(data, 100);
+    println!("Final data: {}", data);
+}
