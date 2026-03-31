@@ -112,7 +112,11 @@ fn generate_output(results: &mut Vec<(String, usize)>) {
     let mut writer = BufWriter::new(out_file);
     results.sort_by(|a, b| a.0.cmp(&b.0));
 
-    writeln!(writer, "pub const RSEQ_CS_POST_COMMIT_OFFSETS: &[(&str, u64)] = &[").unwrap();
+    writeln!(
+        writer,
+        "pub const RSEQ_CS_POST_COMMIT_OFFSETS: &[(&str, u64)] = &["
+    )
+    .unwrap();
     for (name, offset) in results {
         writeln!(writer, "    (\"{}\", {}),", name, offset).unwrap();
     }
@@ -126,7 +130,7 @@ fn process_functions_in_so(so_path: &str) -> Result<()> {
     let obj_file = object::File::parse(&*data).expect("Failed to parse ELF");
 
     let magic = get_post_commit_offset_marker_value(&obj_file)?;
-    let mut result = get_symbol_offsets(&obj_file, ".text.rseq_commit", &magic)?;
+    let mut result = get_symbol_offsets(&obj_file, ".text.rseq_commit", magic)?;
 
     generate_output(&mut result);
     Ok(())

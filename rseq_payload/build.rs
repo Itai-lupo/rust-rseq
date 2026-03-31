@@ -12,7 +12,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let bindings = bindgen::Builder::default()
         .header("wrapper.h")
         .use_core()
-        .ctypes_prefix("cty")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .generate()?;
 

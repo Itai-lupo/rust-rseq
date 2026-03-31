@@ -1,6 +1,7 @@
 [package]
 name = "rseq_main"
 version = "0.1.0"
+license = "MIT"
 edition = "2024"
 
 [dependencies]
@@ -22,11 +23,11 @@ rstest = "0.26.1"
 opt-level = 3
 
 [profile.release]
-lto = "fat"
-strip = true
+lto = true
 opt-level = 3
 panic = "abort"
 codegen-units = 1
+strip = true 
 
 [profile.dev]
 panic = "unwind"

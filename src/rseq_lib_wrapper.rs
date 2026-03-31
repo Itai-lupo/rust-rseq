@@ -1,5 +1,5 @@
 use dlopen_rs::{ElfLibrary, OpenFlags};
-use std::{mem, sync::OnceLock};
+use std::sync::OnceLock;
 
 const PAYLOAD_SO: &[u8] = include_bytes!(env!("PAYLOAD_SO"));
 
@@ -17,8 +17,6 @@ const RSEQ_START: &str = "rseq_start";
 const RSEQ_COMMIT_END: &str = "rseq_commit_end";
 const RSEQ_ABORT_IP: &str = "rseq_abort_ip";
 
-// const RSEQ_LIB_FLAGS: OpenFlags = OpenFlags::RTLD_NOW | OpenFlags::RTLD_NODELETE | OpenFlags::RTLD_LOCAL;
-
 impl RseqSo {
     pub fn get() -> &'static Self {
         static INSTANCE: OnceLock<RseqSo> = OnceLock::new();
@@ -27,7 +25,11 @@ impl RseqSo {
 
     fn init() -> Self {
         let lib = match {
-            ElfLibrary::dlopen_from_binary(PAYLOAD_SO, "librseq_payload.so", OpenFlags::RTLD_NOW | OpenFlags::RTLD_NODELETE | OpenFlags::RTLD_LOCAL)
+            ElfLibrary::dlopen_from_binary(
+                PAYLOAD_SO,
+                "librseq_payload.so",
+                OpenFlags::RTLD_NOW | OpenFlags::RTLD_NODELETE | OpenFlags::RTLD_LOCAL,
+            )
         } {
             Ok(lib) => lib,
             Err(e) => {
@@ -62,20 +64,14 @@ impl RseqSo {
     where
         F: Copy,
     {
-        match unsafe { self.lib.get::<*const ()>(fun_name) } {
-            Ok(symbol) => {
-                // symbol is a wrapper around the pointer.
-                // We dereference the symbol to get the *const () address,
-                // then transmute that address into the function type F.
-                unsafe { mem::transmute_copy(&*symbol) }
-            }
+        match unsafe { self.lib.get::<F>(fun_name) } {
+            Ok(symbol) => *symbol,
             Err(e) => {
                 panic!("Failed to load symbol '{}': {}", fun_name, e);
             }
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -92,8 +88,8 @@ mod tests {
     #[test]
     fn test_get_function_addr() {
         let rseq = RseqSo::get();
-        let addr = rseq.get_symbol_addr("rseq_start");
-        assert_ne!(addr, 0);
+        let addr = rseq.get_symbol_addr("rseq_start") as u64;
+        assert_eq!(addr, rseq.start_section_addr);
     }
 
     #[test]

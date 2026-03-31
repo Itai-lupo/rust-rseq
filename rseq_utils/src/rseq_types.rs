@@ -1,4 +1,4 @@
-use enumflags2::{bitflags};
+use enumflags2::bitflags;
 
 #[repr(i32)]
 pub enum RseqCpuIdState {
@@ -46,4 +46,3 @@ pub struct RseqCs {
     pub post_commit_offset: u64,
     pub abort_ip: u64,
 }
-

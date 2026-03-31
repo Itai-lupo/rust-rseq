@@ -1,6 +1,6 @@
 use std::ffi::c_void;
 
-use rseq_main::{RseqCs, RseqCsExt, find_offset, RseqCsInput, RseqSo, get_thread_rseq};
+use rseq_main::{RseqCs, RseqCsExt, RseqCsInput, RseqSo, find_offset, get_thread_rseq};
 
 #[test]
 fn tests_rseq_counter_is_correct() {
@@ -35,14 +35,13 @@ fn tests_rseq_counter_is_correct() {
     );
 
     println!("Executing RSEQ logic...");
-    
+
     for _ in 1..100 {
         rseq_cs_wrapper_function(&mut cs_input);
         println!("Counter result: {}", counter);
     }
-    // assert_eq!(counter, 99);
+    assert_eq!(counter, 99);
 }
-
 
 #[test]
 fn tests_rseq_counter_is_correct2() {}

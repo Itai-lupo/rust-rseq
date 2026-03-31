@@ -2,6 +2,7 @@
 name = "rseq_payload"
 version = "0.1.0"
 edition = "2024"
+license = "MIT"
 build = "build.rs"
 
 [lib]
@@ -10,16 +11,17 @@ crate-type = ["cdylib"]
 
 [dependencies]
 rseq_utils = { path = "../rseq_utils", default-features = false }
-cty = "0.2"
 
 [build-dependencies]
 bindgen = "0.72"
 
 [profile.release]
-panic = "abort"
 lto = true
-codegen-units = 1
-incremental = false
 opt-level = 3
+panic = "abort"
+codegen-units = 1
 strip = false
+
+[profile.dev]
+panic = "abort"
 
