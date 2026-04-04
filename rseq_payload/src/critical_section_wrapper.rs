@@ -71,13 +71,15 @@ pub unsafe extern "C" fn rseq_end_handler_call_marker() {
 #[macro_export]
 macro_rules! rseq_cs_end {
     () => {
-        asm!(
-            "jmp 91f",
-            ".long 0xDEADC0DE",
-            "91:",
-            options(nostack, preserves_flags)
-        );
-        $crate::critical_section_wrapper::rseq_end_handler();
+        unsafe {
+            asm!(
+                "jmp 91f",
+                ".long 0xDEADC0DE",
+                "91:",
+                options(nostack, preserves_flags)
+            );
+            $crate::critical_section_wrapper::rseq_end_handler();
+        }
     };
 }
 

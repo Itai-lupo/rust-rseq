@@ -8,6 +8,8 @@ build = "build.rs"
 [lib]
 name = "rseq_payload"
 crate-type = ["cdylib"]
+test = false
+doctest = false
 
 [dependencies]
 rseq_utils = { path = "../rseq_utils", default-features = false }

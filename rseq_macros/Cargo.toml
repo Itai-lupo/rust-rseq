@@ -10,3 +10,7 @@ proc-macro = true
 syn = { version = "2.0", features = ["full", "extra-traits"] }
 quote = "1.0"
 proc-macro2 = "1.0"
+rseq_utils = { path = "../rseq_utils" }
+
+[dev-dependencies]
+regex = "1.0"

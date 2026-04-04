@@ -1,9 +1,11 @@
+[workspace]
+members = ["rseq_macros", "rseq_utils", "rseq_payload", "build_utils"]
+
 [package]
 name = "rseq_main"
 version = "0.1.0"
 license = "MIT"
 edition = "2024"
-
 
 [dependencies]
 syscalls = "0.8.1"
@@ -14,6 +16,11 @@ rseq_utils = { path = "rseq_utils" }
 rseq_macros = { path = "./rseq_macros" }
 
 [build-dependencies]
+build_utils = { path = "./build_utils" }
+
+syn = { version = "2.0", features = ["full", "visit"] }
+walkdir = "2.4"
+quote = "1.0"
 build-print = "1.0.1"
 object = "0.38.1"
 memmap2 = "0.9"
@@ -33,4 +40,13 @@ strip = true
 
 [profile.dev]
 panic = "unwind"
+
+
+[profile.release.package.rseq_payload]
+# panic = "abort"
+strip = false
+
+[profile.dev.package.rseq_payload]
+# panic = "abort"
+strip = false
 

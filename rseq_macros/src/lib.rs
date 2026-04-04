@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use std::fs;
+
 use syn::{
     parse::{Parse, ParseStream},
     parse_macro_input, Block, ExprClosure, Ident, ItemFn, Token,
@@ -12,6 +12,9 @@ struct SimpleRseqInput {
     commit: ItemFn,
     cs: ExprClosure,
 }
+
+mod rseq_function_handle;
+use crate::rseq_function_handle::*;
 
 impl Parse for SimpleRseqInput {
     fn parse(input: ParseStream) -> syn::Result<Self> {
@@ -55,7 +58,7 @@ pub fn rseq_context(input: TokenStream) -> TokenStream {
 
     let commit_name_ident = &commit_fn.sig.ident;
     let cs_logic = &input.cs;
-    let entry_name = format_ident!("{}", task_ident);
+    let entry_name = format_ident!("{}_a", task_ident);
 
     let helpers_str = quote! {
         #(#helpers_content)*
@@ -74,7 +77,7 @@ pub fn rseq_context(input: TokenStream) -> TokenStream {
         }
     };
 
-    let final_so_code = format!(
+    let _final_so_code = format!(
         r#"{}
 
  #[unsafe(no_mangle)]
@@ -88,8 +91,8 @@ pub fn rseq_context(input: TokenStream) -> TokenStream {
         helpers_str, commit_str, cs_wrapper_str
     );
 
-    let out_dir = std::env::var("OUT_DIR").unwrap_or_else(|_| ".".into());
-    fs::write(format!("{}/rseq_{}.rs", out_dir, task_ident), final_so_code).ok();
+    // let out_dir = std::env::var("OUT_DIR").unwrap_or_else(|_| ".".into());
+    // fs::write(format!("{}/rseq_{}.rs", out_dir, task_ident), final_so_code).ok();
 
     quote! {
         pub const #task_ident: RseqTask = RseqTask {
@@ -99,3 +102,36 @@ pub fn rseq_context(input: TokenStream) -> TokenStream {
     }
     .into()
 }
+
+#[proc_macro_attribute]
+pub fn rseq_shared_struct(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(item as syn::ItemStruct);
+
+    let expanded = quote! {
+        #[repr(C)]
+        #[derive(Clone, Copy)]
+        #input
+    };
+    TokenStream::from(expanded)
+}
+
+#[proc_macro_attribute]
+pub fn rseq_commit_action(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(item as ItemFn);
+    TokenStream::from(rseq_commit_action_impl(input))
+}
+
+#[proc_macro_attribute]
+pub fn rseq_critical_section_start(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(item as ItemFn);
+    TokenStream::from(rseq_critical_section_start_impl(input))
+}
+
+#[proc_macro_attribute]
+pub fn rseq_critical_section(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(item as ItemFn);
+    TokenStream::from(rseq_critical_section_impl(input))
+}
+
+#[cfg(test)]
+mod test_utils;

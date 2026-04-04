@@ -1,12 +1,12 @@
 #![no_std]
 #![feature(thread_local)]
 use core::arch::asm;
+use core::ffi::c_void;
 use core::panic::PanicInfo;
 
 pub mod abort_handler;
 pub mod critical_section_wrapper;
 
-pub use critical_section_wrapper::{rseq_cs_wrapper, rseq_end_handler_call_marker};
 
 #[allow(non_upper_case_globals)]
 #[allow(non_camel_case_types)]
@@ -22,9 +22,11 @@ unsafe impl GlobalAlloc for NoAlloc {
     unsafe fn alloc(&self, _layout: Layout) -> *mut u8 {
         panic!("heap allocation disabled")
     }
+
     unsafe fn alloc_zeroed(&self, _layout: Layout) -> *mut u8 {
         panic!("heap allocation disabled")
     }
+
     unsafe fn dealloc(&self, _ptr: *mut u8, _layout: Layout) {}
     unsafe fn realloc(&self, _ptr: *mut u8, _layout: Layout, _new_size: usize) -> *mut u8 {
         panic!("heap allocation disabled")
@@ -77,8 +79,8 @@ pub fn commit_action3(ptr: *mut u64) {
     }
 }
 
-#[cfg(has_user_tasks)]
-include!(concat!(env!("OUT_DIR"), "/all_user_tasks.rs"));
+// #[cfg(has_user_tasks)]
+include!(concat!(env!("OUT_DIR"), "/rseq_gen.rs"));
 
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {

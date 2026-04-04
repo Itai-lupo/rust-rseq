@@ -23,7 +23,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("cargo:rerun-if-changed={}", path);
 
         let out_dir = std::env::var("OUT_DIR").unwrap();
-        let dest = std::path::Path::new(&out_dir).join("all_user_tasks.rs");
+        let dest = std::path::Path::new(&out_dir).join("rseq_gen.rs");
         std::fs::copy(path, dest).unwrap();
         println!("cargo:rustc-cfg=has_user_tasks");
     } else {

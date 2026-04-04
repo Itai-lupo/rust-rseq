@@ -9,7 +9,6 @@ pub struct RseqCsInput {
     pub rseq: *mut Rseq,
     pub critical_section_to_use: u64,
 
-    // this will be called at the start of the rseq cs
     pub cs_callback: unsafe extern "C" fn(*mut c_void),
 
     // this should have only one function call at the end to rseq_end_handler and the 1 instraction commit right before it.
@@ -17,8 +16,6 @@ pub struct RseqCsInput {
     // the call might not be at the end but you should check that the commit instaction is right
     // before the call
     // pub commit_action_callback: unsafe extern "C" fn(*mut c_void),
-
-    // this will be called if the critical section was aborted.
     pub abort_callback: Option<unsafe extern "C" fn()>,
 
     pub user_data: *mut c_void,
@@ -29,7 +26,6 @@ impl RseqCsInput {
         rseq: *mut Rseq,
         critical_section_to_use: u64,
         cs_callback: unsafe extern "C" fn(*mut c_void),
-        // commit_action_callback: unsafe extern "C" fn(*mut c_void),
         abort_callback: Option<unsafe extern "C" fn()>,
         user_data: *mut c_void,
     ) -> Self {
@@ -37,7 +33,6 @@ impl RseqCsInput {
             rseq,
             critical_section_to_use,
             cs_callback,
-            // commit_action_callback,
             abort_callback,
             user_data,
         }
@@ -61,7 +56,46 @@ macro_rules! parse_u32 {
 
 pub const RSEQ_SIG: u32 = parse_u32!(env!("RSEQ_SIG"));
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub struct RseqCommitActionName(pub &'static str);
+
+impl core::ops::Deref for RseqCommitActionName {
+    type Target = str;
+    fn deref(&self) -> &Self::Target {
+        self.0
+    }
+}
+
+impl AsRef<str> for RseqCommitActionName {
+    fn as_ref(&self) -> &str {
+        self.0
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::fmt::Display for RseqCommitActionName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+pub struct RseqStart(pub &'static str);
+
+impl core::ops::Deref for RseqStart {
+    type Target = str;
+    fn deref(&self) -> &Self::Target {
+        self.0
+    }
+}
+
+impl AsRef<str> for RseqStart {
+    fn as_ref(&self) -> &str {
+        self.0
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::fmt::Display for RseqStart {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
 }
