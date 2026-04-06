@@ -17,6 +17,8 @@ rseq_macros = { path = "./rseq_macros" }
 
 [build-dependencies]
 build_utils = { path = "./build_utils" }
+color-eyre = { version = "0.6", features = ["capture-spantrace", "tracing-error"] }
+snafu = { version = "0.8", features = ["backtrace", "std"] }
 
 syn = { version = "2.0", features = ["full", "visit"] }
 walkdir = "2.4"
@@ -41,12 +43,9 @@ strip = true
 [profile.dev]
 panic = "unwind"
 
-
 [profile.release.package.rseq_payload]
-# panic = "abort"
 strip = false
 
 [profile.dev.package.rseq_payload]
-# panic = "abort"
 strip = false
 

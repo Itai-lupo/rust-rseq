@@ -1,10 +1,12 @@
 use memmap2::Mmap;
 use object::{File, Object, ObjectSection, ObjectSymbol, SymbolKind};
-use std::error::Error;
+use snafu::{OptionExt, ResultExt};
 use std::fs;
 use std::io::{BufWriter, Write};
 
-pub type Result<T> = std::result::Result<T, Box<dyn Error>>;
+use crate::{
+    GenricSymbolSnafu, IoSnafu, MagicFoundMultipleTimesSnafu, MagicNotFoundSnafu, ObjectSnafu, Result, RseqBuildError, RseqCommitSectionNotFoundSnafu, SymbolDataNotFoundSnafu
+};
 
 // --------------------- post commit offsets table code gen ---------------------------------
 const POST_COMMIT_OFFSET_MARKER_SYMBOL_NAME: &str = "rseq_end_handler_call_marker";
@@ -17,10 +19,10 @@ fn find_magic_offset_exactly_once(data: &[u8], magic: &[u8]) -> Result<usize> {
         .filter(|(_, window)| *window == magic)
         .map(|(i, _)| i);
 
-    let first = matches.next().ok_or("didn't find magic in symbol")?;
+    let first = matches.next().context(MagicNotFoundSnafu {})?;
 
     if matches.next().is_some() {
-        return Err("magic found multiple times".into());
+        return MagicFoundMultipleTimesSnafu {}.fail();
     }
 
     Ok(first)
@@ -29,22 +31,25 @@ fn find_magic_offset_exactly_once(data: &[u8], magic: &[u8]) -> Result<usize> {
 fn get_symbol_bytes<'a>(file: &'a File<'a>, symbol_name: &str) -> Result<&'a [u8]> {
     let symbol = file
         .symbol_by_name(symbol_name)
-        .ok_or_else(|| format!("Symbol '{}' not found", symbol_name))?;
+        .context(GenricSymbolSnafu {
+            symbol_name: symbol_name.to_string(),
+            message: "Symbol '{}' not found".to_string(),
+        })?;
 
-    let section_index = symbol
-        .section()
-        .index()
-        .ok_or_else(|| format!("Symbol '{}' has no associated section", symbol_name))?;
+    let section_index = symbol.section().index().context(GenricSymbolSnafu {
+        symbol_name: symbol_name.to_string(),
+        message: "Symbol '{}' has no associated section".to_string(),
+    })?;
 
-    let section = file.section_by_index(section_index)?;
+    let section = file
+        .section_by_index(section_index)
+        .context(ObjectSnafu {})?;
 
     let data = section
-        .data_range(symbol.address(), symbol.size())?
-        .ok_or_else(|| {
-            format!(
-                "Data for symbol '{}' is not present in the file",
-                symbol_name
-            )
+        .data_range(symbol.address(), symbol.size())
+        .context(ObjectSnafu {})?
+        .context(SymbolDataNotFoundSnafu {
+            symbol_name: symbol_name.to_string(),
         })?;
 
     Ok(data)
@@ -67,7 +72,9 @@ fn get_symbol_offsets(
 ) -> Result<Vec<(String, usize)>> {
     let section_index = file
         .section_by_name(section_name)
-        .ok_or_else(|| format!("Section '{}' not found", section_name))?
+        .context(RseqCommitSectionNotFoundSnafu {
+            section_name: section_name.to_string(),
+        })?
         .index();
 
     let mut results = Vec::new();
@@ -95,7 +102,7 @@ fn process_symbol(
         return Ok(None);
     }
 
-    let name = symbol.name()?;
+    let name = symbol.name().context(ObjectSnafu {})?;
     let symbol_data = get_symbol_bytes(file, name)?;
     let offset = find_magic_offset_exactly_once(symbol_data, magic)?;
 
@@ -121,8 +128,8 @@ fn generate_output(results: &mut Vec<(String, usize)>) {
 }
 
 pub fn process_functions_in_so(so_path: &str) -> Result<()> {
-    let file_handle = fs::File::open(so_path)?;
-    let data = unsafe { Mmap::map(&file_handle)? };
+    let file_handle = fs::File::open(so_path).context(IoSnafu)?;
+    let data = unsafe { Mmap::map(&file_handle).context(IoSnafu)? };
     let obj_file = object::File::parse(&*data).expect("Failed to parse ELF");
 
     let magic = get_post_commit_offset_marker_value(&obj_file)?;

@@ -6,6 +6,7 @@ use rseq_main::{RseqCs, RseqCsExt, RseqCsInput, RseqSo, RseqTask, find_offset, g
 use rseq_macros::{
     rseq_commit_action, rseq_critical_section, rseq_critical_section_start, rseq_shared_struct,
 };
+
 use rseq_utils::{RseqCommitActionName, RseqStart};
 
 #[rseq_critical_section_start]
@@ -17,7 +18,6 @@ pub fn MY_COUNTER_a(ctx: *mut c_void) {
 pub fn helper_function1() -> Test {
     Test { a: 1 }
 }
-
 
 #[rseq_commit_action]
 pub fn update_log(res: *mut u64) {

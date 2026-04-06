@@ -24,10 +24,10 @@ pub fn commit(a: &mut Test) {
 pub fn secondary_func() {}
 
 #[rseq_shared_struct]
+#[warn(dead_code)]
 struct Test {
     a: u64,
 }
-
 
 #[test]
 fn test_type_safety() {
