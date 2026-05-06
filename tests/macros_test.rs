@@ -4,8 +4,14 @@ use rseq_macros::{
 use rseq_utils::{RseqCommitActionName, RseqStart};
 
 #[rseq_critical_section_start]
-pub fn my_api_handler() {
+pub fn my_api_handler(a: *mut c_void, b: u32) -> Result<*mut c_void, u32>{
     // a
+    return Ok(a);
+}
+
+#[rseq_critical_section_start]
+pub fn secondary_func(a: *mut c_void, b: u32) -> Result<*mut c_void, u32>{
+    return Ok(a);
 }
 
 #[rseq_critical_section]
@@ -20,11 +26,9 @@ pub fn commit(a: &mut Test) {
     rseq_cs_end!();
 }
 
-#[rseq_critical_section_start]
-pub fn secondary_func() {}
 
-#[rseq_shared_struct]
 #[warn(dead_code)]
+#[rseq_shared_struct]
 struct Test {
     a: u64,
 }

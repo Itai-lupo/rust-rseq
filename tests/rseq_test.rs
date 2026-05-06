@@ -10,14 +10,13 @@ use rseq_macros::{
 use rseq_utils::{RseqCommitActionName, RseqStart};
 
 #[rseq_critical_section_start]
-pub fn MY_COUNTER_a(ctx: *mut c_void) {
+pub fn MY_COUNTER_a(ctx:  *mut c_void, b: u32) -> Result<*mut c_void, u32> {
     update_log(ctx as *mut u64);
+
+    return Ok(ctx);
 }
 
-#[rseq_critical_section]
-pub fn helper_function1() -> Test {
-    Test { a: 1 }
-}
+
 
 #[rseq_commit_action]
 pub fn update_log(res: *mut u64) {
@@ -54,7 +53,7 @@ fn tests_rseq_counter_is_correct() {
 
     let rseq_lib: &RseqSo = RseqSo::get();
 
-    let rseq_cs_wrapper_function: fn(&mut RseqCsInput) =
+   let rseq_cs_wrapper_function: fn(&mut RseqCsInput) =
         rseq_lib.get_function_ptr("rseq_cs_wrapper");
 
     let commit_function = rseq_lib.get_symbol_addr("commit_action") as u64;

@@ -111,6 +111,7 @@
 
 
           packages = with pkgs; [
+          cargo-nextest
             clang
             just
             rustfmt
